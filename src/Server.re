@@ -15,36 +15,31 @@ let startSocketIOServer = http => {
       open InnerServer;
       print_endline("Got a connection!");
       Js.log(player);
-      let messageHandler = (_typ, player, data) => {
+      let onRestart = () => {
+        Array.fill(board, 0, 9, Empty);
+        Socket.broadcast(socket, Board, (Array.to_list(board), true));
+        Socket.emit(socket, Board, (Array.to_list(board), false));
+      };
+      let onBoard = (player, cell) => {
         let canPlay = player mod 2 === 0;
-        switch (data) {
-        | CommonTypes.PlayMove(cell) => board[cell] = canPlay ? X : O
-        | CommonTypes.Restart => Array.fill(board, 0, 9, Empty)
-        | _ => ()
-        };
-        Socket.broadcast(
-          socket,
-          Message,
-          Board(Array.to_list(board), true),
-        );
-        Socket.emit(socket, Message, Board(Array.to_list(board), false));
+        board[cell] = canPlay ? X : O;
+        Socket.broadcast(socket, Board, (Array.to_list(board), true));
+        Socket.emit(socket, Board, (Array.to_list(board), false));
+      };
+      let onPlayMove = (player, cell) => {
+        let canPlay = player mod 2 === 0;
+        board[cell] = canPlay ? X : O;
+        Socket.broadcast(socket, Board, (Array.to_list(board), true));
+        Socket.emit(socket, Board, (Array.to_list(board), false));
       };
       /* Polymorphic pipe which actually knows about CommonTypes.t from InnerServer */
-      Socket.on(
-        socket,
-        CommonTypes.Message,
-        messageHandler(CommonTypes.Message, player^),
-      );
-      Socket.on(
-        socket,
-        CommonTypes.MessageOnEnter,
-        messageHandler(CommonTypes.MessageOnEnter, player^),
-      );
-      Js.log("sending something");
+      Socket.on(socket, CommonTypes.Restart, onRestart);
+      Socket.on(socket, CommonTypes.Board, onBoard(player^));
+      Socket.on(socket, CommonTypes.PlayMove, onPlayMove(player^));
       Socket.emit(
         socket,
-        CommonTypes.Message,
-        CommonTypes.Board(Array.to_list(board), player^ mod 2 === 0),
+        CommonTypes.Board,
+        (Array.to_list(board), player^ mod 2 === 0),
       );
       player := player^ + 1;
     },

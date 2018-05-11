@@ -3,8 +3,7 @@ module CustomClient = BsSocket.Client.Make(CommonTypes);
 
 let socket = CustomClient.create();
 
-CustomClient.on(socket, CommonTypes.Message, Js.log);
-
+/* CustomClient.on(socket, CommonTypes.Message, Js.log); */
 /* State declaration.
    The grid is a simple linear list.
    The turn uses a gridCellT to figure out whether it's X or O's turn.
@@ -45,27 +44,21 @@ let make = _children => {
   didMount: self =>
     CustomClient.on(
       socket,
-      CommonTypes.Message,
-      fun
-      | Board(board, canPlay) => {
-          self.send(UpdateBoard(board));
-          self.send(Turn(canPlay ? X : O));
-        }
-      | _ => (),
+      CommonTypes.Board,
+      ((board, canPlay)) => {
+        self.send(UpdateBoard(board));
+        self.send(Turn(canPlay ? X : O));
+      },
     ),
   /* State transitions */
   reducer: (action, state) =>
     switch (state, action) {
     | (_, Click(cell)) =>
-      CustomClient.emit(
-        socket,
-        CommonTypes.Message,
-        CommonTypes.PlayMove(cell),
-      );
+      CustomClient.emit(socket, CommonTypes.PlayMove, cell);
       /* Return new winner, new turn and new grid. */
       ReasonReact.NoUpdate;
     | (_, Restart) =>
-      CustomClient.emit(socket, CommonTypes.Message, CommonTypes.Restart);
+      CustomClient.emit(socket, Restart, ());
       ReasonReact.NoUpdate;
     | (_, UpdateBoard(grid)) =>
       let arrGrid = Array.of_list(grid);

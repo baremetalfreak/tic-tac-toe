@@ -3,19 +3,14 @@ type gridCellT =
   | O
   | Empty;
 
-type action =
-  | PlayMove(int)
-  | Board(list(gridCellT), bool)
-  | Restart;
-
 type t('a) =
-  | Message: t(action)
-  | MessageOnEnter: t(int)
-  | UnusedMessageType: t('a);
+  | PlayMove: t(int)
+  | Board: t((list(gridCellT), bool))
+  | Restart;
 
 let stringify = (type a, t: t(a)) =>
   switch (t) {
-  | Message => "Message"
-  | MessageOnEnter => "MessageOnEnter"
-  | UnusedMessageType => "UnusedMessageType"
+  | PlayMove => "PlayMove"
+  | Board => "Board"
+  | Restart => "Restart"
   };
