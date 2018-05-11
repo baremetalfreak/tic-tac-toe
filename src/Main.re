@@ -24,6 +24,7 @@ type state = {
 type action =
   | Restart
   | UpdateBoard(list(CommonTypes.gridCellT))
+  | Turn(CommonTypes.gridCellT)
   | Click(int);
 
 /* Component template declaration.
@@ -50,7 +51,10 @@ let make = _children => {
       socket,
       CommonTypes.Message,
       fun
-      | Board(board) => self.send(UpdateBoard(board))
+      | Board(board, canPlay) => {
+        self.send(UpdateBoard(board));
+      self.send(Turn(canPlay ? X : O));
+    }
       | _ => ()
     );
   },
@@ -125,6 +129,9 @@ let make = _children => {
       ...state,
       grid
     })
+    | (_, Turn(turn)) => ReasonReact.Update({
+      ...state,
+      turn    })
     },
   render: self => {
     let yourTurn = self.state.you == self.state.turn;
