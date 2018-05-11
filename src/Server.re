@@ -15,11 +15,11 @@ let startSocketIOServer = http => {
       open InnerServer;
       print_endline("Got a connection!");
       Js.log(player);
-      let pipe = (_typ, player, data) => {
+      let messageHandler = (_typ, player, data) => {
         let canPlay = player mod 2 === 0;
         switch (data) {
         | CommonTypes.PlayMove(cell) => board[cell] = canPlay ? X : O
-        | CommonTypes.Restart => Array.fill(board, 0, 8, Empty)
+        | CommonTypes.Restart => Array.fill(board, 0, 9, Empty)
         | _ => ()
         };
         Socket.broadcast(
@@ -33,12 +33,12 @@ let startSocketIOServer = http => {
       Socket.on(
         socket,
         CommonTypes.Message,
-        pipe(CommonTypes.Message, player^),
+        messageHandler(CommonTypes.Message, player^),
       );
       Socket.on(
         socket,
         CommonTypes.MessageOnEnter,
-        pipe(CommonTypes.MessageOnEnter, player^),
+        messageHandler(CommonTypes.MessageOnEnter, player^),
       );
       Js.log("sending something");
       Socket.emit(

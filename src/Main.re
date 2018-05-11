@@ -3,11 +3,7 @@ module CustomClient = BsSocket.Client.Make(CommonTypes);
 
 let socket = CustomClient.create();
 
-CustomClient.on(
-  socket,
-  CommonTypes.Message,
-  Js.log
-);
+CustomClient.on(socket, CommonTypes.Message, Js.log);
 
 /* State declaration.
    The grid is a simple linear list.
@@ -15,7 +11,7 @@ CustomClient.on(
    The winner will be a list of indices which we'll use to highlight the grid when someone won. */
 type state = {
   grid: list(CommonTypes.gridCellT),
-  turn:CommonTypes.gridCellT,
+  turn: CommonTypes.gridCellT,
   you: CommonTypes.gridCellT,
   winner: option(list(int)),
 };
@@ -46,34 +42,33 @@ let make = _children => {
     you: X,
     winner: None,
   },
-  didMount: (self) => {
+  didMount: self =>
     CustomClient.on(
       socket,
       CommonTypes.Message,
       fun
       | Board(board, canPlay) => {
-        self.send(UpdateBoard(board));
-      self.send(Turn(canPlay ? X : O));
-    }
-      | _ => ()
-    );
-  },
+          self.send(UpdateBoard(board));
+          self.send(Turn(canPlay ? X : O));
+        }
+      | _ => (),
+    ),
   /* State transitions */
   reducer: (action, state) =>
     switch (state, action) {
-    | ({turn, grid}, Click(cell)) =>
-      /* Apply the action to the grid first, then we check if this new grid is in a winning state. */
-      let newGrid =
-        List.mapi(
-          (i, el) =>
-            if (cell === i) {
-              turn;
-            } else {
-              el;
-            },
-          grid,
-        );
-      let arrGrid = Array.of_list(newGrid);
+    | (_, Click(cell)) =>
+      CustomClient.emit(
+        socket,
+        CommonTypes.Message,
+        CommonTypes.PlayMove(cell),
+      );
+      /* Return new winner, new turn and new grid. */
+      ReasonReact.NoUpdate;
+    | (_, Restart) =>
+      CustomClient.emit(socket, CommonTypes.Message, CommonTypes.Restart);
+      ReasonReact.NoUpdate;
+    | (_, UpdateBoard(grid)) =>
+      let arrGrid = Array.of_list(grid);
       /* Military grade, Machine Learning based, winning-condition checking algorithm:
          just list all the possible options one by one.
          */
@@ -113,25 +108,8 @@ let make = _children => {
         } else {
           None;
         };
-      /* Return new winner, new turn and new grid. */
-      ReasonReact.UpdateWithSideEffects({
-        ...state,
-        winner,
-        turn: turn === X ? O : X,
-        grid: newGrid,
-      }, _ => {
-        CustomClient.emit(socket, CommonTypes.Message, CommonTypes.PlayMove(cell))
-      });
-    | (_, Restart) =>
-        CustomClient.emit(socket, CommonTypes.Message, CommonTypes.Restart);
-        ReasonReact.NoUpdate;
-    | (_, UpdateBoard(grid)) => ReasonReact.Update({
-      ...state,
-      grid
-    })
-    | (_, Turn(turn)) => ReasonReact.Update({
-      ...state,
-      turn    })
+      ReasonReact.Update({...state, winner, grid});
+    | (_, Turn(turn)) => ReasonReact.Update({...state, turn})
     },
   render: self => {
     let yourTurn = self.state.you == self.state.turn;
