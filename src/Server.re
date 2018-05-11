@@ -2,9 +2,10 @@ module InnerServer = BsSocket.Server.Make(CommonTypes);
 
 let player = ref(0);
 
-open CommonTypes;
-
-let board = [|Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty|];
+let board =
+  CommonTypes.(
+    [|Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty|]
+  );
 
 let startSocketIOServer = http => {
   print_endline("starting socket server");
@@ -17,25 +18,16 @@ let startSocketIOServer = http => {
         Socket.broadcast(socket, Board, (Array.to_list(board), true));
         Socket.emit(socket, Board, (Array.to_list(board), false));
       };
-      print_endline("Got a connection!");
-      Js.log(player);
       let onRestart = () => {
         Array.fill(board, 0, 9, Empty);
         updateClients(board);
       };
-      let onBoard = (player, cell) => {
-        let canPlay = player === 0;
-        board[cell] = canPlay ? X : O;
-        updateClients(board);
-      };
       let onPlayMove = (player, cell) => {
-        let canPlay = player === 0;
-        board[cell] = canPlay ? X : O;
+        board[cell] = player === 0 ? X : O;
         updateClients(board);
       };
-      /* Polymorphic pipe which actually knows about CommonTypes.t from InnerServer */
+      Js.log2("Got a connection:", player);
       Socket.on(socket, CommonTypes.Restart, onRestart);
-      Socket.on(socket, CommonTypes.Board, onBoard(player^));
       Socket.on(socket, CommonTypes.PlayMove, onPlayMove(player^));
       Socket.emit(
         socket,
