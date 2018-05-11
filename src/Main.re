@@ -1,17 +1,22 @@
 /* Type representing a grid cell */
-type gridCellT =
-  | X
-  | O
-  | Empty;
+module CustomClient = BsSocket.Client.Make(CommonTypes);
+
+let socket = CustomClient.create();
+
+CustomClient.on(
+  socket,
+  CommonTypes.Message,
+  Js.log
+);
 
 /* State declaration.
    The grid is a simple linear list.
    The turn uses a gridCellT to figure out whether it's X or O's turn.
    The winner will be a list of indices which we'll use to highlight the grid when someone won. */
 type state = {
-  grid: list(gridCellT),
-  turn: gridCellT,
-  you: gridCellT,
+  grid: list(CommonTypes.gridCellT),
+  turn:CommonTypes.gridCellT,
+  you: CommonTypes.gridCellT,
   winner: option(list(int)),
 };
 
@@ -95,11 +100,13 @@ let make = _children => {
           None;
         };
       /* Return new winner, new turn and new grid. */
-      ReasonReact.Update({
+      ReasonReact.UpdateWithSideEffects({
         ...state,
         winner,
         turn: turn === X ? O : X,
         grid: newGrid,
+      }, _ => {
+        CustomClient.emit(socket, CommonTypes.Message, CommonTypes.PlayMove(cell))
       });
     | (_, Restart) =>
       /* Reset the entire state */
@@ -170,9 +177,9 @@ let make = _children => {
                   (i, piece) => {
                     let (txt, canClick) =
                       switch (piece) {
-                      | Empty => (" ", true)
-                      | X => ("X", false)
-                      | O => ("O", false)
+                      | CommonTypes.Empty => (" ", true)
+                      | CommonTypes.X => ("X", false)
+                      | CommonTypes.O => ("O", false)
                       };
                     let backgroundColor =
                       switch (self.state.winner) {
