@@ -119,13 +119,8 @@ let make = _children => {
         CustomClient.emit(socket, CommonTypes.Message, CommonTypes.PlayMove(cell))
       });
     | (_, Restart) =>
-      /* Reset the entire state */
-      ReasonReact.Update({
-        ...state,
-        grid: [Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty],
-        turn: X,
-        winner: None,
-      })
+        CustomClient.emit(socket, CommonTypes.Message, CommonTypes.Restart);
+        ReasonReact.NoUpdate;
     | (_, UpdateBoard(grid)) => ReasonReact.Update({
       ...state,
       grid

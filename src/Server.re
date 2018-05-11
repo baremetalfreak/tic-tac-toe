@@ -14,13 +14,15 @@ let startSocketIOServer = http => {
     socket => {
       open InnerServer;
       print_endline("Got a connection!");
-      let pipe = (_typ, player, data) =>
+      let pipe = (_typ, player, data) => {
         switch (data) {
-        | CommonTypes.PlayMove(cell) =>
-          board[cell] = player === 0 ? X : O;
-          Socket.emit(socket, Message, Board(Array.to_list(board)));
+        | CommonTypes.PlayMove(cell) => board[cell] = player === 0 ? X : O
+        | CommonTypes.Restart => Array.fill(board, 0, 8, Empty)
         | _ => ()
         };
+        Socket.broadcast(socket, Message, Board(Array.to_list(board)));
+        Socket.emit(socket, Message, Board(Array.to_list(board)));
+      };
       /* Polymorphic pipe which actually knows about CommonTypes.t from InnerServer */
       Socket.on(
         socket,

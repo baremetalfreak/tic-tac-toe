@@ -5,7 +5,8 @@ type gridCellT =
 
 type action =
   | PlayMove(int)
-  | Board(list(gridCellT));
+  | Board(list(gridCellT))
+  | Restart;
 
 type t('a) =
   | Message: t(action)
