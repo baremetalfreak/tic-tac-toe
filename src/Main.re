@@ -23,6 +23,7 @@ type state = {
 /* Action declaration */
 type action =
   | Restart
+  | UpdateBoard(list(CommonTypes.gridCellT))
   | Click(int);
 
 /* Component template declaration.
@@ -43,6 +44,15 @@ let make = _children => {
     turn: X,
     you: X,
     winner: None,
+  },
+  didMount: (self) => {
+    CustomClient.on(
+      socket,
+      CommonTypes.Message,
+      fun
+      | Board(board) => self.send(UpdateBoard(board))
+      | _ => ()
+    );
   },
   /* State transitions */
   reducer: (action, state) =>
@@ -116,6 +126,10 @@ let make = _children => {
         turn: X,
         winner: None,
       })
+    | (_, UpdateBoard(grid)) => ReasonReact.Update({
+      ...state,
+      grid
+    })
     },
   render: self => {
     let yourTurn = self.state.you == self.state.turn;
