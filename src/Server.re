@@ -21,13 +21,13 @@ let startSocketIOServer = http => {
         Socket.emit(socket, Board, (Array.to_list(board), false));
       };
       let onBoard = (player, cell) => {
-        let canPlay = player mod 2 === 0;
+        let canPlay = player === 0;
         board[cell] = canPlay ? X : O;
         Socket.broadcast(socket, Board, (Array.to_list(board), true));
         Socket.emit(socket, Board, (Array.to_list(board), false));
       };
       let onPlayMove = (player, cell) => {
-        let canPlay = player mod 2 === 0;
+        let canPlay = player === 0;
         board[cell] = canPlay ? X : O;
         Socket.broadcast(socket, Board, (Array.to_list(board), true));
         Socket.emit(socket, Board, (Array.to_list(board), false));
@@ -39,9 +39,9 @@ let startSocketIOServer = http => {
       Socket.emit(
         socket,
         CommonTypes.Board,
-        (Array.to_list(board), player^ mod 2 === 0),
+        (Array.to_list(board), player^ === 0),
       );
-      player := player^ + 1;
+      player := (player^ + 1) mod 2;
     },
   );
 };
