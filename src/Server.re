@@ -35,7 +35,7 @@ let startSocketIOServer = http => {
         Socket.emit(socket, Board, (board, canPlay));
       let broadcastBoard = (board, ~canPlay) =>
         Socket.broadcast(socket, Board, (board, canPlay));
-      let updateClients = board => {
+      let onRestart = () => {
         let sendingToLastPlayer =
           switch (lastPlayer^) {
           | Some(lastPlayer) => lastPlayer === socket
@@ -43,6 +43,7 @@ let startSocketIOServer = http => {
           /* TODO: this case does not happen */
           | Empty => false
           };
+        Array.fill(board, 0, 9, Empty);
         board
         |> convert(socket, ~invert=sendingToLastPlayer)
         |> Array.to_list
@@ -51,10 +52,6 @@ let startSocketIOServer = http => {
         |> convert(socket, ~invert=sendingToLastPlayer)
         |> Array.to_list
         |> broadcastBoard(~canPlay=sendingToLastPlayer);
-      };
-      let onRestart = () => {
-        Array.fill(board, 0, 9, Empty);
-        board |> updateClients;
       };
       let onPlayMove = cellIndex => {
         lastPlayer := Some(socket);
