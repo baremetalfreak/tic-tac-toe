@@ -3,14 +3,21 @@ type gridCellT =
   | O
   | Empty;
 
+type playerT =
+  | X
+  | O
+  | Spectator;
+
 type t('a) =
   | PlayMove: t(int)
   | Board: t((list(gridCellT), bool))
-  | Restart;
+  | Restart
+  | Disconnect;
 
 let stringify = (type a, t: t(a)) =>
   switch (t) {
   | PlayMove => "PlayMove"
   | Board => "Board"
   | Restart => "Restart"
+  | Disconnect => "disconnect"
   };
