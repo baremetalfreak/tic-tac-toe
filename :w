@@ -1,0 +1,59 @@
+module InnerServer = BsSocket.Server.Make(CommonTypes);
+
+type cell =
+  | None
+  | Some(BsSocket.Server.socketT)
+  | Empty;
+
+let board = [|Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty|];
+
+let players = ref([]);
+
+let convert = (socket, grid, invert) =>
+  Array.map(
+    fun
+    | Empty => CommonTypes.Empty
+    | Some(cellSocket) when cellSocket === socket =>
+      invert ? CommonTypes.X : CommonTypes.O
+    | _ => invert ? CommonTypes.O? CommonTypes.X,
+    grid,
+  );
+
+/* let lastPlayer = ref(None); */
+let startSocketIOServer = http => {
+  print_endline("starting socket server");
+  let io = InnerServer.createWithHttp(http);
+  InnerServer.onConnect(
+    io,
+    socket => {
+      open InnerServer;
+      let updateClients = board => {
+        Socket.broadcast(socket, Board, (Array.to_list(board), true));
+        Socket.emit(socket, Board, (Array.to_list(board), false));
+      };
+      let onRestart = () => {
+        Array.fill(board, 0, 9, Empty);
+        board |> convert(socket) |> updateClients;
+      };
+      let onPlayMove = cell => {
+        board[cell] = Some(socket);
+        board |> convert(socket) |> updateClients;
+      };
+      Socket.on(socket, CommonTypes.Restart, onRestart);
+      Socket.on(socket, CommonTypes.PlayMove, onPlayMove);
+      Socket.on(socket, CommonTypes.Disconnect, () =>
+        players := List.filter(player => player !== socket, players^)
+      );
+      Socket.emit(
+        socket,
+        CommonTypes.Board,
+        (board |> convert(socket) |> Array.to_list, true),
+      );
+      switch (players^) {
+      | [] => players := [socket]
+      | [_] => players := [socket, ...players^]
+      | _ => ()
+      };
+    },
+  );
+};
