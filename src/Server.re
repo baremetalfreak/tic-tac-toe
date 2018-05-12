@@ -47,7 +47,7 @@ let startSocketIOServer = http => {
         board
         |> convert(socket, ~invert=sendingToLastPlayer)
         |> Array.to_list
-        |> sendBoard(~canPlay=sendingToLastPlayer);
+        |> sendBoard(~canPlay=! sendingToLastPlayer);
         board
         |> convert(socket, ~invert=sendingToLastPlayer)
         |> Array.to_list
@@ -110,9 +110,9 @@ let startSocketIOServer = http => {
             List.exists(playerSocket => playerSocket === lastPlayer, players^)
           | _ => false
           };
-        Js.log(lastPlayerStillInGame);
-        if (! lastPlayerStillInGame) {
-          lastPlayer := Some(socket);
+        Js.log2("lastPlayerStillInGame", lastPlayerStillInGame);
+        if (lastPlayerStillInGame) {
+          /* it's the connecing player's turn */
           board
           |> convert(socket)
           |> Array.to_list
@@ -122,6 +122,8 @@ let startSocketIOServer = http => {
           |> Array.to_list
           |> broadcastBoard(~canPlay=false);
         } else {
+          /* it's not the connecting player's turn   */
+          lastPlayer := Some(socket);
           board
           |> convert(socket)
           |> Array.to_list
