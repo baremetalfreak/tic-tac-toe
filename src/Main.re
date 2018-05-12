@@ -55,7 +55,6 @@ let make = _children => {
     switch (state, action) {
     | (_, Click(cell)) =>
       CustomClient.emit(socket, CommonTypes.PlayMove, cell);
-      /* Return new winner, new turn and new grid. */
       ReasonReact.NoUpdate;
     | (_, Restart) =>
       CustomClient.emit(socket, Restart, ());

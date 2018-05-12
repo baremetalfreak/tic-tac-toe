@@ -9,6 +9,8 @@ let board = [|Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty|];
 
 let players = ref([]);
 
+/* TODO: fix this */
+/* let lastPlayer: ref(option(BsSocket.Server.socketT)) = ref(None); */
 let lastPlayer = ref(None);
 
 let convert = (~invert=false, socket, grid) =>
@@ -16,8 +18,8 @@ let convert = (~invert=false, socket, grid) =>
     fun
     | Empty => CommonTypes.Empty
     | Some(cellSocket) when cellSocket === socket =>
-      invert ? CommonTypes.X : CommonTypes.O
-    | _ => invert ? CommonTypes.O : CommonTypes.X,
+      invert ? CommonTypes.O : CommonTypes.X
+    | _ => invert ? CommonTypes.X : CommonTypes.O,
     grid,
   );
 
@@ -29,64 +31,73 @@ let startSocketIOServer = http => {
     io,
     socket => {
       open InnerServer;
+      let sendBoard = (board, ~canPlay) =>
+        Socket.emit(socket, Board, (board, canPlay));
+      let broadcastBoard = (board, ~canPlay) =>
+        Socket.broadcast(socket, Board, (board, canPlay));
       let updateClients = board => {
-        Socket.broadcast(
-          socket,
-          Board,
-          (board |> convert(socket, ~invert=true) |> Array.to_list, true),
-        );
-        Socket.emit(
-          socket,
-          Board,
-          (board |> convert(socket) |> Array.to_list, false),
-        );
+        let sendingToLastPlayer =
+          switch (lastPlayer^) {
+          | Some(lastPlayer) => lastPlayer === socket
+          | None => false
+          /* TODO: this case does not happen */
+          | Empty => false
+          };
+        board
+        |> convert(socket, ~invert=sendingToLastPlayer)
+        |> Array.to_list
+        |> sendBoard(~canPlay=sendingToLastPlayer);
+        board
+        |> convert(socket, ~invert=sendingToLastPlayer)
+        |> Array.to_list
+        |> broadcastBoard(~canPlay=sendingToLastPlayer);
       };
       let onRestart = () => {
         Array.fill(board, 0, 9, Empty);
         board |> updateClients;
       };
-      let onPlayMove = cell => {
+      let onPlayMove = cellIndex => {
         lastPlayer := Some(socket);
-        board[cell] = Some(socket);
-        board |> updateClients;
+        board[cellIndex] = Some(socket);
+        board
+        |> convert(socket, ~invert=false)
+        |> Array.to_list
+        |> sendBoard(~canPlay=false);
+        board
+        |> convert(socket, ~invert=true)
+        |> Array.to_list
+        |> broadcastBoard(~canPlay=true);
+      };
+      let onDisconnect = () => {
+        Js.log("Player left.");
+        players := List.filter(player => player !== socket, players^);
+        /* remove player from board */
+        Array.iteri(
+          (i, content) =>
+            switch (content) {
+            | Some(cellSocket) when cellSocket === socket => board[i] = None
+            | _ => ()
+            },
+          board,
+        );
       };
       Socket.on(socket, CommonTypes.Restart, onRestart);
       Socket.on(socket, CommonTypes.PlayMove, onPlayMove);
-      Socket.on(
-        socket,
-        CommonTypes.Disconnect,
-        () => {
-          players := List.filter(player => player !== socket, players^);
-          Array.iteri(
-            (i, content) =>
-              switch (content) {
-              | Some(cellSocket) when cellSocket === socket => board[i] = None
-              | _ => ()
-              },
-            board,
-          );
-        },
-      );
+      Socket.on(socket, CommonTypes.Disconnect, onDisconnect);
       switch (players^) {
       | [] =>
+        Js.log("First Player joined.");
         players := [socket];
+        lastPlayer := Some(socket);
         Socket.emit(
           socket,
           CommonTypes.Board,
           (board |> convert(socket) |> Array.to_list, true),
         );
       | [_] =>
-        let lastPlayerStillInGame =
-          List.exists(
-            playerSocket =>
-              switch (lastPlayer^) {
-              | Some(lastPlayer) => playerSocket === lastPlayer
-              | _ => false
-              },
-            players^,
-          );
-        Js.log(lastPlayerStillInGame);
+        Js.log("Second Player joined.");
         players := [socket, ...players^];
+        /* fix board */
         Array.iteri(
           (i, content) =>
             switch (content) {
@@ -95,16 +106,34 @@ let startSocketIOServer = http => {
             },
           board,
         );
-        Socket.emit(
-          socket,
-          CommonTypes.Board,
-          (
-            board
-            |> convert(socket, ~invert=! lastPlayerStillInGame)
-            |> Array.to_list,
-            lastPlayerStillInGame,
-          ),
-        );
+        /* fix lastPlayer */
+        let lastPlayerStillInGame =
+          switch (lastPlayer^) {
+          | Some(lastPlayer) =>
+            List.exists(playerSocket => playerSocket === lastPlayer, players^)
+          | _ => false
+          };
+        Js.log(lastPlayerStillInGame);
+        if (! lastPlayerStillInGame) {
+          lastPlayer := Some(socket);
+          board
+          |> convert(socket)
+          |> Array.to_list
+          |> sendBoard(~canPlay=true);
+          board
+          |> convert(socket, ~invert=true)
+          |> Array.to_list
+          |> broadcastBoard(~canPlay=false);
+        } else {
+          board
+          |> convert(socket)
+          |> Array.to_list
+          |> sendBoard(~canPlay=false);
+          board
+          |> convert(socket, ~invert=true)
+          |> Array.to_list
+          |> broadcastBoard(~canPlay=true);
+        };
       | _ => ()
       };
     },
