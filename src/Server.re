@@ -55,17 +55,23 @@ let removeSocket = (state, socket) =>
     state;
   };
 
-let onRestart = () => {
-  state := {...state^, player: X, board: newBoard};
-  updateClients(state^);
+let update = newState => state := newState;
+
+let updateWithSideEffect = (newState, sideEffect) => {
+  state := newState;
+  sideEffect(newState);
 };
 
-let onPlayMove = cell => {
-  state := playMove(state^, cell);
-  updateClients(state^);
-};
+let onRestart = state =>
+  updateWithSideEffect(
+    {...state, player: X, board: newBoard},
+    updateClients,
+  );
 
-let onDisconnect = (socket, ()) => state := removeSocket(state^, socket);
+let onPlayMove = (state, cell) =>
+  updateWithSideEffect(playMove(state, cell), updateClients);
+
+let onDisconnect = (state, socket) => update(removeSocket(state, socket));
 
 let startSocketIOServer = http => {
   print_endline("Starting socket server");
@@ -73,9 +79,13 @@ let startSocketIOServer = http => {
   InnerServer.onConnect(
     io,
     (socket: BsSocket.Server.socketT) => {
-      InnerServer.Socket.on(socket, Restart, onRestart);
-      InnerServer.Socket.on(socket, PlayMove, onPlayMove);
-      InnerServer.Socket.on(socket, Disconnect, onDisconnect(socket));
+      InnerServer.Socket.on(socket, Restart, () => onRestart(state^));
+      InnerServer.Socket.on(socket, PlayMove, cell =>
+        onPlayMove(state^, cell)
+      );
+      InnerServer.Socket.on(socket, Disconnect, () =>
+        onDisconnect(state^, socket)
+      );
       if (state^.x === None) {
         Js.log("X connected");
         state := {...state^, x: Some(socket)};
