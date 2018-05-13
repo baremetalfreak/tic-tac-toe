@@ -1,6 +1,8 @@
 /* Type representing a grid cell */
 module CustomClient = BsSocket.Client.Make(CommonTypes);
 
+open CommonTypes;
+
 let socket = CustomClient.create();
 
 /* CustomClient.on(socket, CommonTypes.Message, Js.log); */
@@ -10,8 +12,8 @@ let socket = CustomClient.create();
    The winner will be a list of indices which we'll use to highlight the grid when someone won. */
 type state = {
   grid: list(CommonTypes.gridCellT),
-  turn: CommonTypes.gridCellT,
-  you: CommonTypes.gridCellT,
+  turn: CommonTypes.playerT,
+  you: CommonTypes.playerT,
   winner: option(list(int)),
 };
 
@@ -19,7 +21,7 @@ type state = {
 type action =
   | Restart
   | UpdateBoard(list(CommonTypes.gridCellT))
-  | Turn(CommonTypes.gridCellT)
+  | Turn(CommonTypes.playerT)
   | Click(int);
 
 /* Component template declaration.
@@ -36,7 +38,7 @@ let make = _children => {
   /* spread the other default fields of component here and override a few */
   ...component,
   initialState: () => {
-    grid: [Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty],
+    grid: [None, None, None, None, None, None, None, None, None],
     turn: X,
     you: X,
     winner: None,
@@ -66,35 +68,35 @@ let make = _children => {
          just list all the possible options one by one.
          */
       let winner =
-        if (arrGrid[0] != Empty
+        if (arrGrid[0] != None
             && arrGrid[0] == arrGrid[1]
             && arrGrid[1] == arrGrid[2]) {
           Some([0, 1, 2]);
-        } else if (arrGrid[3] != Empty
+        } else if (arrGrid[3] != None
                    && arrGrid[3] == arrGrid[4]
                    && arrGrid[4] == arrGrid[5]) {
           Some([3, 4, 5]);
-        } else if (arrGrid[6] != Empty
+        } else if (arrGrid[6] != None
                    && arrGrid[6] == arrGrid[7]
                    && arrGrid[7] == arrGrid[8]) {
           Some([6, 7, 8]);
-        } else if (arrGrid[0] != Empty
+        } else if (arrGrid[0] != None
                    && arrGrid[0] == arrGrid[3]
                    && arrGrid[3] == arrGrid[6]) {
           Some([0, 3, 6]);
-        } else if (arrGrid[1] != Empty
+        } else if (arrGrid[1] != None
                    && arrGrid[1] == arrGrid[4]
                    && arrGrid[4] == arrGrid[7]) {
           Some([1, 4, 7]);
-        } else if (arrGrid[2] != Empty
+        } else if (arrGrid[2] != None
                    && arrGrid[2] == arrGrid[5]
                    && arrGrid[5] == arrGrid[8]) {
           Some([2, 5, 8]);
-        } else if (arrGrid[0] != Empty
+        } else if (arrGrid[0] != None
                    && arrGrid[0] == arrGrid[4]
                    && arrGrid[4] == arrGrid[8]) {
           Some([0, 4, 8]);
-        } else if (arrGrid[2] != Empty
+        } else if (arrGrid[2] != None
                    && arrGrid[2] == arrGrid[4]
                    && arrGrid[4] == arrGrid[6]) {
           Some([2, 4, 6]);
@@ -110,7 +112,7 @@ let make = _children => {
       switch (self.state.winner) {
       | None => yourTurn ? "Your turn" : "Their turn"
       | Some([i, ..._]) =>
-        List.nth(self.state.grid, i) == X ? "X wins!" : "O wins"
+        List.nth(self.state.grid, i) == Some(X) ? "X wins!" : "O wins"
       | _ => assert false
       };
     ReasonReact.(
@@ -164,22 +166,22 @@ let make = _children => {
                   (i, piece) => {
                     let (txt, canClick) =
                       switch (piece) {
-                      | CommonTypes.Empty => (" ", true)
-                      | CommonTypes.X => ("X", false)
-                      | CommonTypes.O => ("O", false)
+                      | None => (" ", true)
+                      | Some(X) => ("X", false)
+                      | Some(O) => ("O", false)
                       };
                     let backgroundColor =
                       switch (self.state.winner) {
                       | None => "white"
                       | Some(winner) =>
                         let isCurrentCellWinner = List.mem(i, winner);
-                        if (isCurrentCellWinner
-                            && List.nth(self.state.grid, i) == self.state.you) {
-                          "green";
-                        } else if (isCurrentCellWinner) {
-                          "red";
-                        } else {
-                          "white";
+                        let isMe =
+                          List.nth(self.state.grid, i)
+                          == Some(self.state.you);
+                        switch (isCurrentCellWinner, isMe) {
+                        | (false, _) => "white"
+                        | (true, true) => "green"
+                        | (true, false) => "red"
                         };
                       };
                     /* We check if the user can click here so we can hide the cursor: pointer. */

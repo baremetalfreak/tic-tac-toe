@@ -1,12 +1,8 @@
-type gridCellT =
-  | X
-  | O
-  | Empty;
-
 type playerT =
   | X
-  | O
-  | Spectator;
+  | O;
+
+type gridCellT = option(playerT);
 
 type t('a) =
   | PlayMove: t(int)

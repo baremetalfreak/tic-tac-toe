@@ -1,6 +1,13 @@
 module InnerServer = BsSocket.Server.Make(CommonTypes);
 
-let player = ref(CommonTypes.X);
+type stateT = {
+  x: option(BsSocket.Server.socketT),
+  o: option(BsSocket.Server.socketT),
+  player: CommonTypes.playerT,
+  board: array(CommonTypes.gridCellT),
+};
+
+let state = ref({x: None, o: None, player: X, board: Array.make(9, None)});
 
 let (|?>>) = (x, fn) =>
   switch (x) {
@@ -8,19 +15,22 @@ let (|?>>) = (x, fn) =>
   | None => None
   };
 
-type socketT = option(BsSocket.Server.socketT);
+let sendBoard = (board, canPlay, socket) =>
+  socket
+  |?>> (
+    socket =>
+      InnerServer.Socket.emit(
+        socket,
+        Board,
+        (Array.to_list(board), canPlay),
+      )
+  )
+  |> ignore;
 
-let socketX: ref(socketT) = ref(None);
-
-let socketO: ref(socketT) = ref(None);
-
-let board =
-  CommonTypes.(
-    [|Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty, Empty|]
-  );
-
-let sendBoard = (canPlay, board, socket) =>
-  InnerServer.Socket.emit(socket, Board, (Array.to_list(board), canPlay));
+let updateClients = ({board, player, x, o}) => {
+  sendBoard(board, player === X, x);
+  sendBoard(board, player === O, o);
+};
 
 let startSocketIOServer = http => {
   print_endline("Starting socket server");
@@ -28,41 +38,51 @@ let startSocketIOServer = http => {
   InnerServer.onConnect(
     io,
     (socket: BsSocket.Server.socketT) => {
-      let updateClients = board => {
-        socketX^ |?>> sendBoard(player^ === X, board) |> ignore;
-        socketO^ |?>> sendBoard(player^ === O, board) |> ignore;
-      };
+      let setCell = (i, cell, j, current) =>
+        if (i == j) {
+          cell;
+        } else {
+          current;
+        };
       let onRestart = () => {
-        Array.fill(board, 0, 9, Empty);
-        player := X;
-        updateClients(board);
+        state := {...state^, player: X, board: Array.make(9, None)};
+        updateClients(state^);
       };
       let onPlayMove = cell => {
-        board[cell] = player^ === CommonTypes.X ? X : O;
-        player := player^ === X ? O : X;
-        updateClients(board);
+        state :=
+          {
+            ...state^,
+            player:
+              switch (state^.player) {
+              | X => O
+              | O => X
+              },
+            board:
+              Array.mapi(setCell(cell, Some(state^.player)), state^.board),
+          };
+        updateClients(state^);
       };
       let onDisconnect = () => {
-        if (socketX^ == Some(socket)) {
-          socketX := None;
+        if (state^.x == Some(socket)) {
+          state := {...state^, x: None};
           Js.log("X disconnected");
         };
-        if (socketO^ == Some(socket)) {
-          socketO := None;
+        if (state^.o == Some(socket)) {
+          state := {...state^, o: None};
           Js.log("O disconnected");
         };
       };
       InnerServer.Socket.on(socket, CommonTypes.Restart, onRestart);
       InnerServer.Socket.on(socket, CommonTypes.PlayMove, onPlayMove);
       InnerServer.Socket.on(socket, CommonTypes.Disconnect, onDisconnect);
-      if (socketX^ === None) {
+      if (state^.x === None) {
         Js.log("X connected");
-        socketX := Some(socket);
-        socket |> sendBoard(player^ === X, board);
-      } else if (socketO^ === None) {
+        state := {...state^, x: Some(socket)};
+        sendBoard(state^.board, state^.player === X, Some(socket));
+      } else if (state^.o === None) {
         Js.log("O connected");
-        socketO := Some(socket);
-        socket |> sendBoard(player^ === O, board);
+        state := {...state^, o: Some(socket)};
+        sendBoard(state^.board, state^.player === O, Some(socket));
       };
     },
   );
