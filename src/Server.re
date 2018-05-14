@@ -71,7 +71,8 @@ let onRestart = state =>
 let onPlayMove = (state, cell) =>
   updateWithSideEffect(playMove(state, cell), updateClients);
 
-let onDisconnect = (state, socket) => update(removeSocket(state, socket));
+let deRegisterPlayer = (state, socket) =>
+  update(removeSocket(state, socket));
 
 let registerPlayer = (state, socket) =>
   if (state.x === None) {
@@ -103,7 +104,7 @@ let startSocketIOServer = http => {
         onPlayMove(state^, cell)
       );
       InnerServer.Socket.on(socket, Disconnect, () =>
-        onDisconnect(state^, socket)
+        deRegisterPlayer(state^, socket)
       );
       registerPlayer(state^, socket);
     },
