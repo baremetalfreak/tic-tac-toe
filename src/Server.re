@@ -73,6 +73,25 @@ let onPlayMove = (state, cell) =>
 
 let onDisconnect = (state, socket) => update(removeSocket(state, socket));
 
+let registerPlayer = (state, socket) =>
+  if (state.x === None) {
+    updateWithSideEffect(
+      {...state, x: Some(socket)},
+      ({board, player}) => {
+        Js.log("X connected");
+        sendBoard(board, player === X, Some(socket));
+      },
+    );
+  } else if (state.o === None) {
+    updateWithSideEffect(
+      {...state, o: Some(socket)},
+      ({board, player}) => {
+        Js.log("O connected");
+        sendBoard(board, player === O, Some(socket));
+      },
+    );
+  };
+
 let startSocketIOServer = http => {
   print_endline("Starting socket server");
   let io = InnerServer.createWithHttp(http);
@@ -86,15 +105,7 @@ let startSocketIOServer = http => {
       InnerServer.Socket.on(socket, Disconnect, () =>
         onDisconnect(state^, socket)
       );
-      if (state^.x === None) {
-        Js.log("X connected");
-        state := {...state^, x: Some(socket)};
-        sendBoard(state^.board, state^.player === X, Some(socket));
-      } else if (state^.o === None) {
-        Js.log("O connected");
-        state := {...state^, o: Some(socket)};
-        sendBoard(state^.board, state^.player === O, Some(socket));
-      };
+      registerPlayer(state^, socket);
     },
   );
 };
