@@ -3,13 +3,13 @@ module InnerServer = BsSocket.Server.Make(CommonTypes);
 type stateT = {
   x: option(BsSocket.Server.socketT),
   o: option(BsSocket.Server.socketT),
-  player: CommonTypes.playerT,
+  nextToPlay: CommonTypes.playerT,
   board: list(CommonTypes.gridCellT),
 };
 
 let newBoard = [None, None, None, None, None, None, None, None, None];
 
-let state = ref({x: None, o: None, player: X, board: newBoard});
+let state = ref({x: None, o: None, nextToPlay: X, board: newBoard});
 
 let (|?>>) = (x, fn) =>
   switch (x) {
@@ -22,9 +22,9 @@ let sendBoard = (board, canPlay, socket) =>
   |?>> (socket => InnerServer.Socket.emit(socket, Board, (board, canPlay)))
   |> ignore;
 
-let updateClients = ({board, player, x, o}) => {
-  sendBoard(board, player === X, x);
-  sendBoard(board, player === O, o);
+let updateClients = ({board, nextToPlay, x, o}) => {
+  sendBoard(board, nextToPlay === X, x);
+  sendBoard(board, nextToPlay === O, o);
 };
 
 let setCell = (i, cell, j, current) =>
@@ -36,12 +36,12 @@ let setCell = (i, cell, j, current) =>
 
 let playMove = (state, cell) => {
   ...state,
-  player:
-    switch (state.player) {
+  nextToPlay:
+    switch (state.nextToPlay) {
     | X => O
     | O => X
     },
-  board: List.mapi(setCell(cell, Some(state.player)), state.board),
+  board: List.mapi(setCell(cell, Some(state.nextToPlay)), state.board),
 };
 
 let removeSocket = (state, socket) =>
@@ -64,7 +64,7 @@ let updateWithSideEffect = (newState, sideEffect) => {
 
 let onRestart = state =>
   updateWithSideEffect(
-    {...state, player: X, board: newBoard},
+    {...state, nextToPlay: X, board: newBoard},
     updateClients,
   );
 
@@ -78,17 +78,17 @@ let registerPlayer = (state, socket) =>
   if (state.x === None) {
     updateWithSideEffect(
       {...state, x: Some(socket)},
-      ({board, player}) => {
+      ({board, nextToPlay}) => {
         Js.log("X connected");
-        sendBoard(board, player === X, Some(socket));
+        sendBoard(board, nextToPlay === X, Some(socket));
       },
     );
   } else if (state.o === None) {
     updateWithSideEffect(
       {...state, o: Some(socket)},
-      ({board, player}) => {
+      ({board, nextToPlay}) => {
         Js.log("O connected");
-        sendBoard(board, player === O, Some(socket));
+        sendBoard(board, nextToPlay === O, Some(socket));
       },
     );
   };
