@@ -1,15 +1,23 @@
 module InnerServer = BsSocket.Server.Make(CommonTypes);
 
 type stateT = {
-  x: option(BsSocket.Server.socketT),
-  o: option(BsSocket.Server.socketT),
-  nextToPlay: CommonTypes.playerT,
+  xSocket: option(BsSocket.Server.socketT),
+  oSocket: option(BsSocket.Server.socketT),
+  observers: list(BsSocket.Server.socketT),
+  turn: CommonTypes.playerT,
   board: list(CommonTypes.gridCellT),
 };
 
 let newBoard = [None, None, None, None, None, None, None, None, None];
 
-let state = ref({x: None, o: None, nextToPlay: X, board: newBoard});
+let state =
+  ref({
+    xSocket: None,
+    oSocket: None,
+    observers: [],
+    turn: X,
+    board: newBoard,
+  });
 
 let (|?>>) = (x, fn) =>
   switch (x) {
@@ -17,14 +25,21 @@ let (|?>>) = (x, fn) =>
   | None => None
   };
 
-let sendBoard = (board, canPlay, socket) =>
+let sendBoard = (board, canPlay, player, socket) =>
   socket
-  |?>> (socket => InnerServer.Socket.emit(socket, Board, (board, canPlay)))
+  |?>> (
+    socket =>
+      InnerServer.Socket.emit(socket, Board, (board, canPlay, player))
+  )
   |> ignore;
 
-let updateClients = ({board, nextToPlay, x, o}) => {
-  sendBoard(board, nextToPlay === X, x);
-  sendBoard(board, nextToPlay === O, o);
+let updateClients = ({board, turn, xSocket, oSocket, observers}) => {
+  sendBoard(board, turn, Some(X), xSocket);
+  sendBoard(board, turn, Some(O), oSocket);
+  List.iter(
+    socket => sendBoard(board, turn, None, Some(socket)),
+    observers,
+  );
 };
 
 let setCell = (i, cell, j, current) =>
@@ -36,22 +51,23 @@ let setCell = (i, cell, j, current) =>
 
 let playMove = (state, cell) => {
   ...state,
-  nextToPlay:
-    switch (state.nextToPlay) {
+  turn:
+    switch (state.turn) {
     | X => O
     | O => X
     },
-  board: List.mapi(setCell(cell, Some(state.nextToPlay)), state.board),
+  board: List.mapi(setCell(cell, Some(state.turn)), state.board),
 };
 
 let removeSocket = (state, socket) =>
-  if (state.x == Some(socket)) {
+  if (state.xSocket == Some(socket)) {
     Js.log("X disconnected");
-    {...state, x: None};
-  } else if (state.o == Some(socket)) {
+    {...state, xSocket: None};
+  } else if (state.oSocket == Some(socket)) {
     Js.log("O disconnected");
-    {...state, o: None};
+    {...state, oSocket: None};
   } else {
+    Js.log("Observer disconnected");
     state;
   };
 
@@ -63,10 +79,7 @@ let updateWithSideEffect = (newState, sideEffect) => {
 };
 
 let onRestart = state =>
-  updateWithSideEffect(
-    {...state, nextToPlay: X, board: newBoard},
-    updateClients,
-  );
+  updateWithSideEffect({...state, turn: X, board: newBoard}, updateClients);
 
 let onPlayMove = (state, cell) =>
   updateWithSideEffect(playMove(state, cell), updateClients);
@@ -75,20 +88,28 @@ let deRegisterPlayer = (state, socket) =>
   update(removeSocket(state, socket));
 
 let registerPlayer = (state, socket) =>
-  if (state.x === None) {
+  if (state.xSocket === None) {
     updateWithSideEffect(
-      {...state, x: Some(socket)},
-      ({board, nextToPlay}) => {
+      {...state, xSocket: Some(socket)},
+      ({board, turn}) => {
         Js.log("X connected");
-        sendBoard(board, nextToPlay === X, Some(socket));
+        sendBoard(board, turn, Some(X), Some(socket));
       },
     );
-  } else if (state.o === None) {
+  } else if (state.oSocket === None) {
     updateWithSideEffect(
-      {...state, o: Some(socket)},
-      ({board, nextToPlay}) => {
+      {...state, oSocket: Some(socket)},
+      ({board, turn}) => {
         Js.log("O connected");
-        sendBoard(board, nextToPlay === O, Some(socket));
+        sendBoard(board, turn, Some(O), Some(socket));
+      },
+    );
+  } else {
+    updateWithSideEffect(
+      {...state, observers: [socket, ...state.observers]},
+      ({board, turn}) => {
+        Js.log("Observer connected");
+        sendBoard(board, turn, None, Some(socket));
       },
     );
   };

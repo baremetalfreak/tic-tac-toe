@@ -13,13 +13,14 @@ let socket = CustomClient.create();
 type state = {
   grid: list(CommonTypes.gridCellT),
   turn: CommonTypes.playerT,
-  you: CommonTypes.playerT,
+  participant: CommonTypes.participantT,
   winner: option(list(int)),
 };
 
 /* Action declaration */
 type action =
   | Restart
+  | SetParticipant(CommonTypes.participantT)
   | UpdateBoard(list(CommonTypes.gridCellT))
   | Turn(CommonTypes.playerT)
   | Click(int);
@@ -40,21 +41,24 @@ let make = _children => {
   initialState: () => {
     grid: [None, None, None, None, None, None, None, None, None],
     turn: X,
-    you: X,
+    participant: None,
     winner: None,
   },
   didMount: self =>
     CustomClient.on(
       socket,
       CommonTypes.Board,
-      ((board, canPlay)) => {
+      ((board, whosTurn, participant)) => {
+        self.send(SetParticipant(participant));
         self.send(UpdateBoard(board));
-        self.send(Turn(canPlay ? X : O));
+        self.send(Turn(whosTurn));
       },
     ),
   /* State transitions */
   reducer: (action, state) =>
     switch (state, action) {
+    | (_, SetParticipant(participant)) =>
+      ReasonReact.Update({...state, participant})
     | (_, Click(cell)) =>
       CustomClient.emit(socket, CommonTypes.PlayMove, cell);
       /* Return new winner, new turn and new grid. */
@@ -107,7 +111,7 @@ let make = _children => {
     | (_, Turn(turn)) => ReasonReact.Update({...state, turn})
     },
   render: self => {
-    let yourTurn = self.state.you == self.state.turn;
+    let yourTurn = self.state.participant == Some(self.state.turn);
     let message =
       switch (self.state.winner) {
       | None => yourTurn ? "Your turn" : "Their turn"
@@ -177,7 +181,7 @@ let make = _children => {
                         let isCurrentCellWinner = List.mem(i, winner);
                         let isMe =
                           List.nth(self.state.grid, i)
-                          == Some(self.state.you);
+                          == self.state.participant;
                         switch (isCurrentCellWinner, isMe) {
                         | (false, _) => "white"
                         | (true, true) => "green"

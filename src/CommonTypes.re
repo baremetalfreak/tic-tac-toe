@@ -4,9 +4,11 @@ type playerT =
 
 type gridCellT = option(playerT);
 
+type participantT = option(playerT);
+
 type t('a) =
   | PlayMove: t(int)
-  | Board: t((list(gridCellT), bool))
+  | Board: t((list(gridCellT), playerT, participantT))
   | Restart
   | Disconnect;
 
