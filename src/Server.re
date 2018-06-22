@@ -26,20 +26,12 @@ let (|?>>) = (x, fn) =>
   };
 
 let sendBoard = (board, canPlay, player, socket) =>
-  socket
-  |?>> (
-    socket =>
-      InnerServer.Socket.emit(socket, Board, (board, canPlay, player))
-  )
-  |> ignore;
+  InnerServer.Socket.emit(socket, Board, (board, canPlay, player)) |> ignore;
 
 let updateClients = ({board, turn, xSocket, oSocket, observers}) => {
-  sendBoard(board, turn, Player(X), xSocket);
-  sendBoard(board, turn, Player(O), oSocket);
-  List.iter(
-    socket => sendBoard(board, turn, Observer, Some(socket)),
-    observers,
-  );
+  xSocket |?>> sendBoard(board, turn, Player(X));
+  oSocket |?>> sendBoard(board, turn, Player(O));
+  List.iter(socket => sendBoard(board, turn, Observer, socket), observers);
 };
 
 let setCell = (i, cell, j, current) =>
@@ -93,7 +85,7 @@ let registerPlayer = (state, socket) =>
       {...state, xSocket: Some(socket)},
       ({board, turn}) => {
         Js.log("X connected");
-        sendBoard(board, turn, Player(X), Some(socket));
+        sendBoard(board, turn, Player(X), socket);
       },
     );
   } else if (state.oSocket === None) {
@@ -101,7 +93,7 @@ let registerPlayer = (state, socket) =>
       {...state, oSocket: Some(socket)},
       ({board, turn}) => {
         Js.log("O connected");
-        sendBoard(board, turn, Player(O), Some(socket));
+        sendBoard(board, turn, Player(O), socket);
       },
     );
   } else {
@@ -109,7 +101,7 @@ let registerPlayer = (state, socket) =>
       {...state, observers: [socket, ...state.observers]},
       ({board, turn}) => {
         Js.log("Observer connected");
-        sendBoard(board, turn, Observer, Some(socket));
+        sendBoard(board, turn, Observer, socket);
       },
     );
   };
