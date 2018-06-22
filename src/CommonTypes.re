@@ -4,7 +4,9 @@ type playerT =
 
 type gridCellT = option(playerT);
 
-type participantT = option(playerT);
+type participantT =
+  | Player(playerT)
+  | Observer;
 
 type t('a) =
   | PlayMove: t(int)

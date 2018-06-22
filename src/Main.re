@@ -41,7 +41,7 @@ let make = _children => {
   initialState: () => {
     grid: [None, None, None, None, None, None, None, None, None],
     turn: X,
-    participant: None,
+    participant: Observer,
     winner: None,
   },
   didMount: self =>
@@ -111,7 +111,7 @@ let make = _children => {
     | (_, Turn(turn)) => ReasonReact.Update({...state, turn})
     },
   render: self => {
-    let yourTurn = self.state.participant == Some(self.state.turn);
+    let yourTurn = self.state.participant == Player(self.state.turn);
     let message =
       switch (self.state.winner) {
       | None => yourTurn ? "Your turn" : "Their turn"
@@ -180,8 +180,11 @@ let make = _children => {
                       | Some(winner) =>
                         let isCurrentCellWinner = List.mem(i, winner);
                         let isMe =
-                          List.nth(self.state.grid, i)
-                          == self.state.participant;
+                          switch (List.nth(self.state.grid, i)) {
+                          | None => false
+                          | Some(_ as player) =>
+                            Player(player) === self.state.participant
+                          };
                         switch (isCurrentCellWinner, isMe) {
                         | (false, _) => "white"
                         | (true, true) => "green"

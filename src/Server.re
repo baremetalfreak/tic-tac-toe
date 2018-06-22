@@ -34,10 +34,10 @@ let sendBoard = (board, canPlay, player, socket) =>
   |> ignore;
 
 let updateClients = ({board, turn, xSocket, oSocket, observers}) => {
-  sendBoard(board, turn, Some(X), xSocket);
-  sendBoard(board, turn, Some(O), oSocket);
+  sendBoard(board, turn, Player(X), xSocket);
+  sendBoard(board, turn, Player(O), oSocket);
   List.iter(
-    socket => sendBoard(board, turn, None, Some(socket)),
+    socket => sendBoard(board, turn, Observer, Some(socket)),
     observers,
   );
 };
@@ -93,7 +93,7 @@ let registerPlayer = (state, socket) =>
       {...state, xSocket: Some(socket)},
       ({board, turn}) => {
         Js.log("X connected");
-        sendBoard(board, turn, Some(X), Some(socket));
+        sendBoard(board, turn, Player(X), Some(socket));
       },
     );
   } else if (state.oSocket === None) {
@@ -101,7 +101,7 @@ let registerPlayer = (state, socket) =>
       {...state, oSocket: Some(socket)},
       ({board, turn}) => {
         Js.log("O connected");
-        sendBoard(board, turn, Some(O), Some(socket));
+        sendBoard(board, turn, Player(O), Some(socket));
       },
     );
   } else {
@@ -109,7 +109,7 @@ let registerPlayer = (state, socket) =>
       {...state, observers: [socket, ...state.observers]},
       ({board, turn}) => {
         Js.log("Observer connected");
-        sendBoard(board, turn, None, Some(socket));
+        sendBoard(board, turn, Observer, Some(socket));
       },
     );
   };
