@@ -1,20 +1,23 @@
-/* Type representing a grid cell */
 module CustomClient = BsSocket.Client.Make(CommonTypes);
 
 open CommonTypes;
 
 let socket = CustomClient.create();
 
-/* CustomClient.on(socket, CommonTypes.Message, Js.log); */
+type gridIndex = int;
+
+type winningCombinationT = (gridIndex, gridIndex, gridIndex);
+
 /* State declaration.
-   The grid is a simple linear list.
-   The turn uses a gridCellT to figure out whether it's X or O's turn.
-   The winner will be a list of indices which we'll use to highlight the grid when someone won. */
+   The grid is a simple linear list
+   The turn tells us if it's X or O's turn
+   The participant tells us if we are X or O or an observer
+   The winningCells will be a list of indices which we'll use to highlight the grid when someone won */
 type state = {
   grid: list(CommonTypes.gridCellT),
   turn: CommonTypes.playerT,
   participant: CommonTypes.participantT,
-  winner: option(list(int)),
+  winningCells: option((gridIndex, gridIndex, gridIndex)),
 };
 
 /* Action declaration */
@@ -32,8 +35,8 @@ let component = ReasonReact.reducerComponent("Game");
 /* Helper functions for CSS properties. */
 let px = x => string_of_int(x) ++ "px";
 
-/* Main function that creates a component, which is a simple record.
-   `component` is the default record, of which we overwrite initialState, reducer and render.
+/* Main function that creates a component, which is a simple record
+   `component` is the default record, of which we overwrite initialState, reducer and render
    */
 let make = _children => {
   /* spread the other default fields of component here and override a few */
@@ -42,16 +45,16 @@ let make = _children => {
     grid: [None, None, None, None, None, None, None, None, None],
     turn: X,
     participant: Observer,
-    winner: None,
+    winningCells: None,
   },
   didMount: self =>
     CustomClient.on(
       socket,
       CommonTypes.Board,
-      ((board, whosTurn, participant)) => {
+      ((board, turn, participant)) => {
         self.send(SetParticipant(participant));
         self.send(UpdateBoard(board));
-        self.send(Turn(whosTurn));
+        self.send(Turn(turn));
       },
     ),
   /* State transitions */
@@ -61,7 +64,7 @@ let make = _children => {
       ReasonReact.Update({...state, participant})
     | (_, Click(cell)) =>
       CustomClient.emit(socket, CommonTypes.PlayMove, cell);
-      /* Return new winner, new turn and new grid. */
+      /* Return new winningCells, new turn and new grid. */
       ReasonReact.NoUpdate;
     | (_, Restart) =>
       CustomClient.emit(socket, Restart, ());
@@ -71,53 +74,35 @@ let make = _children => {
       /* Military grade, Machine Learning based, winning-condition checking algorithm:
          just list all the possible options one by one.
          */
-      let winner =
-        if (arrGrid[0] != None
-            && arrGrid[0] == arrGrid[1]
-            && arrGrid[1] == arrGrid[2]) {
-          Some([0, 1, 2]);
-        } else if (arrGrid[3] != None
-                   && arrGrid[3] == arrGrid[4]
-                   && arrGrid[4] == arrGrid[5]) {
-          Some([3, 4, 5]);
-        } else if (arrGrid[6] != None
-                   && arrGrid[6] == arrGrid[7]
-                   && arrGrid[7] == arrGrid[8]) {
-          Some([6, 7, 8]);
-        } else if (arrGrid[0] != None
-                   && arrGrid[0] == arrGrid[3]
-                   && arrGrid[3] == arrGrid[6]) {
-          Some([0, 3, 6]);
-        } else if (arrGrid[1] != None
-                   && arrGrid[1] == arrGrid[4]
-                   && arrGrid[4] == arrGrid[7]) {
-          Some([1, 4, 7]);
-        } else if (arrGrid[2] != None
-                   && arrGrid[2] == arrGrid[5]
-                   && arrGrid[5] == arrGrid[8]) {
-          Some([2, 5, 8]);
-        } else if (arrGrid[0] != None
-                   && arrGrid[0] == arrGrid[4]
-                   && arrGrid[4] == arrGrid[8]) {
-          Some([0, 4, 8]);
-        } else if (arrGrid[2] != None
-                   && arrGrid[2] == arrGrid[4]
-                   && arrGrid[4] == arrGrid[6]) {
-          Some([2, 4, 6]);
-        } else {
-          None;
+      let winningCombinations = [
+        (0, 1, 2),
+        (3, 4, 5),
+        (6, 7, 8),
+        (0, 3, 6),
+        (1, 4, 7),
+        (2, 5, 8),
+        (0, 4, 8),
+        (2, 4, 6),
+      ];
+      let isWinning = ((a, b, c)) =>
+        arrGrid[a] != None
+        && arrGrid[a] == arrGrid[b]
+        && arrGrid[b] == arrGrid[c];
+      let safeFind = (p, l) =>
+        try (Some(List.find(p, l))) {
+        | Not_found => None
         };
-      ReasonReact.Update({...state, winner, grid});
+      let winningCells = safeFind(isWinning, winningCombinations);
+      ReasonReact.Update({...state, winningCells, grid});
     | (_, Turn(turn)) => ReasonReact.Update({...state, turn})
     },
   render: self => {
     let yourTurn = self.state.participant == Player(self.state.turn);
     let message =
-      switch (self.state.winner) {
+      switch (self.state.winningCells) {
       | None => yourTurn ? "Your turn" : "Their turn"
-      | Some([i, ..._]) =>
+      | Some((i, _, _)) =>
         List.nth(self.state.grid, i) == Some(X) ? "X wins!" : "O wins"
-      | _ => assert false
       };
     ReasonReact.(
       <div
@@ -163,7 +148,7 @@ let make = _children => {
           )>
           (
             /* Iterate over our grid and create the cells, with their contents and background color
-               if there's a winner.*/
+               if there's a winningCells.*/
             array(
               Array.of_list(
                 List.mapi(
@@ -175,10 +160,10 @@ let make = _children => {
                       | Some(O) => ("O", false)
                       };
                     let backgroundColor =
-                      switch (self.state.winner) {
+                      switch (self.state.winningCells) {
                       | None => "white"
-                      | Some(winner) =>
-                        let isCurrentCellWinner = List.mem(i, winner);
+                      | Some((a, b, c)) =>
+                        let isCurrentCellWinner = i == a || i == b || i == c;
                         let isMe =
                           switch (List.nth(self.state.grid, i)) {
                           | None => false
@@ -193,7 +178,7 @@ let make = _children => {
                       };
                     /* We check if the user can click here so we can hide the cursor: pointer. */
                     let canClick =
-                      canClick && yourTurn && self.state.winner == None;
+                      canClick && yourTurn && self.state.winningCells == None;
                     <div
                       key=(string_of_int(i))
                       onClick=(_event => canClick ? self.send(Click(i)) : ())
