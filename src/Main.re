@@ -97,13 +97,34 @@ let make = _children => {
     | (_, Turn(turn)) => ReasonReact.Update({...state, turn})
     },
   render: self => {
-    let yourTurn = self.state.participant == Player(self.state.turn);
-    let message =
+    let winner =
       switch (self.state.winningCells) {
-      | None => yourTurn ? "Your turn" : "Their turn"
-      | Some((i, _, _)) =>
-        List.nth(self.state.grid, i) == Some(X) ? "X wins!" : "O wins"
+      | None => None
+      | Some((i, _, _)) => Array.of_list(self.state.grid)[i]
       };
+    let gameMessage =
+      switch (winner, self.state.participant, self.state.turn) {
+      | (Some(_), _, _) => "Game over, "
+      | (None, Observer, _) => "You are an observer"
+      | (None, Player(X), X)
+      | (None, Player(O), O) => "Your turn"
+      | (None, Player(X), O)
+      | (None, Player(O), X) => "Their turn"
+      };
+    let winningMessage =
+      switch (winner, self.state.participant) {
+      | (Some(_ as winner), Observer) =>
+        switch (winner) {
+        | X => "X Wins"
+        | O => "O Wins"
+        }
+      | (Some(X), Player(X))
+      | (Some(O), Player(O)) => "You win"
+      | (Some(X), Player(O))
+      | (Some(O), Player(X)) => "You loose"
+      | (None, _) => ""
+      };
+    let myTurn = self.state.participant == Player(self.state.turn);
     ReasonReact.(
       <div
         style=(
@@ -116,7 +137,7 @@ let make = _children => {
           )
         )>
         <div style=(ReactDOMRe.Style.make(~fontSize=px(45), ()))>
-          (string(message))
+          (string(gameMessage ++ winningMessage))
         </div>
         <button
           style=(
@@ -164,21 +185,22 @@ let make = _children => {
                       | None => "white"
                       | Some((a, b, c)) =>
                         let isCurrentCellWinner = i == a || i == b || i == c;
-                        let isMe =
-                          switch (List.nth(self.state.grid, i)) {
-                          | None => false
-                          | Some(_ as player) =>
-                            Player(player) === self.state.participant
-                          };
-                        switch (isCurrentCellWinner, isMe) {
-                        | (false, _) => "white"
-                        | (true, true) => "green"
-                        | (true, false) => "red"
+                        switch (
+                          isCurrentCellWinner,
+                          self.state.participant,
+                          winner,
+                        ) {
+                        | (true, Player(X), Some(X))
+                        | (true, Player(O), Some(O)) => "green"
+                        | (true, Player(X), Some(O))
+                        | (true, Player(O), Some(X)) => "red"
+                        | (true, Observer, _) => "blue"
+                        | (_, _, _) => "white"
                         };
                       };
                     /* We check if the user can click here so we can hide the cursor: pointer. */
                     let canClick =
-                      canClick && yourTurn && self.state.winningCells == None;
+                      canClick && myTurn && self.state.winningCells == None;
                     <div
                       key=(string_of_int(i))
                       onClick=(_event => canClick ? self.send(Click(i)) : ())
